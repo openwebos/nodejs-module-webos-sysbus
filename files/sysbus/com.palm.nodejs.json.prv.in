@@ -1,0 +1,7 @@
+{
+    "role": {
+        "exeName":"@WEBOS_INSTALL_BINDIR@/node",
+        "type": "privileged",
+        "allowedNames": ["*"]
+    }
+}
