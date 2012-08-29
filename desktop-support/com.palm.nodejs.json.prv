@@ -1,0 +1,7 @@
+{
+    "role": {
+        "exeName":"/usr/lib/luna/node",
+        "type": "privileged",
+        "allowedNames": ["*"]
+    }
+}
