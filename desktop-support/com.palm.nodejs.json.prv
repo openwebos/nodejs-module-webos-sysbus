@@ -1,6 +1,6 @@
 {
     "role": {
-        "exeName":"/usr/lib/luna/node",
+        "exeName":"/usr/palm/nodejs/node",
         "type": "privileged",
         "allowedNames": ["*"]
     }
