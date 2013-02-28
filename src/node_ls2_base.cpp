@@ -32,7 +32,14 @@ void LS2Base::EmitMessage(const Handle<String>& symbol, LSMessage *message)
     // messageObject will be empty if a v8 exception is thrown in
     // LS2Message::NewFromMessage
     if (!messageObject.IsEmpty()) {
-        Emit(symbol, 1, &messageObject);
+
+      Handle<Value> argv[2] =
+      {
+        symbol, // event name
+        messageObject  // argument
+      };
+
+      MakeCallback(Context::GetCurrent()->Global(), "emit", 2, argv);
     } else {
         // We don't want to silently lose messages
         syslog(LOG_USER | LOG_CRIT, "%s: messageObject is empty", __PRETTY_FUNCTION__);

@@ -22,11 +22,10 @@
 #include <lunaservice.h>
 #include <node.h>
 #include <node_object_wrap.h>
-#include <node_events.h>
 
 class LS2Handle;
 
-class LS2Base : public node::EventEmitter {
+class LS2Base : public node::ObjectWrap {
 protected:
 	// Common routine called whenever a message arrives from the bus. Different symbols
 	// are used to differentiate requests, responses and cancelled subscriptions

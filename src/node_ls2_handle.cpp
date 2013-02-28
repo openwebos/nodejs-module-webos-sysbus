@@ -67,7 +67,6 @@ void LS2Handle::Initialize(Handle<Object> target)
     
     t->SetClassName(String::New("palmbus/Handle"));
 
-    t->Inherit(EventEmitter::constructor_template);
     t->InstanceTemplate()->SetInternalFieldCount(1);
 
     NODE_SET_PROTOTYPE_METHOD(t, "call", CallWrapper);
@@ -351,21 +350,6 @@ bool LS2Handle::RequestArrived(LSMessage *message)
     HandleScope scope;
     EmitMessage(request_symbol, message);
     return true;
-}
-
-void LS2Handle::EmitMessage(const Handle<String>& symbol, LSMessage *message)
-{
-    Local<Value> messageObject = LS2Message::NewFromMessage(message);
-        
-    // messageObject will be empty if a v8 exception is thrown in
-    // LS2Message::NewFromMessage
-    if (!messageObject.IsEmpty()) {
-        Emit(symbol, 1, &messageObject);
-    } else {
-        // We don't want to silently lose messages
-        syslog(LOG_USER | LOG_CRIT, "%s: messageObject is empty", __PRETTY_FUNCTION__);
-        abort();
-    }
 }
 
 void LS2Handle::RequireHandle()

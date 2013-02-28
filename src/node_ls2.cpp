@@ -20,7 +20,6 @@
 #include <glib.h>
 #include <iostream>
 #include <node.h>
-#include <node_events.h>
 #include <stdlib.h>
 #include <v8.h>
 
@@ -150,7 +149,6 @@ static void check_cb(EV_P_ ev_check* w, int revents)
 
 static struct econtext default_context;
 
-extern "C" void
 init(Handle<Object> target)
 {
     HandleScope scope;
@@ -195,3 +193,4 @@ GMainLoop* GetMainLoop()
 {
     return gMainLoop;
 }
+NODE_MODULE(palmbus, init)

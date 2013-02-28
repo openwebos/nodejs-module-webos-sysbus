@@ -47,7 +47,6 @@ void LS2Call::Initialize (Handle<Object> target)
 
     gCallTemplate = Persistent<FunctionTemplate>::New(t);
 
-    t->Inherit(EventEmitter::constructor_template);
     t->InstanceTemplate()->SetInternalFieldCount(1);
 
     NODE_SET_PROTOTYPE_METHOD(t, "cancel", CancelWrapper);
