@@ -16,7 +16,8 @@
 //
 // LICENSE@@@
 
-var pb = require('webos-sysbus');
+//var pb = require('webos-sysbus');
+var pb = require('palmbus');
 var sys = require('sys');
 var _ = require('underscore')._;
 

@@ -39,7 +39,7 @@ void LS2Base::EmitMessage(const Handle<String>& symbol, LSMessage *message)
         messageObject  // argument
       };
 
-      MakeCallback(Context::GetCurrent()->Global(), "emit", 2, argv);
+      MakeCallback(this->handle_, "emit", 2, argv);
     } else {
         // We don't want to silently lose messages
         syslog(LOG_USER | LOG_CRIT, "%s: messageObject is empty", __PRETTY_FUNCTION__);

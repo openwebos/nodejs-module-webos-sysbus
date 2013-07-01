@@ -1,6 +1,6 @@
 // @@@LICENSE
 //
-//      Copyright (c) 2010-2013 LG Electronics, Inc.
+//      Copyright (c) 2013 LG Electronics
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,20 +16,13 @@
 //
 // LICENSE@@@
 
-//var pb = require('webos-sysbus');
-var pb = require('palmbus');
-var sys = require('sys');
-var _ = require('underscore')._;
+// javascript shim that lets our objects inherit from EventEmitter
 
-function responseArrived(message) {
-	sys.log("responseArrived[" + message.responseToken() + "]:" + message.payload());
-}
+var EventEmitter = require('events').EventEmitter;
+var pbus = require('./webos-sysbus.node');
 
-sys.log("creating ls2 handle object");
+pbus.Handle.prototype.__proto__ = EventEmitter.prototype;
+pbus.Message.prototype.__proto__ = EventEmitter.prototype;
+pbus.Call.prototype.__proto__ = EventEmitter.prototype;
 
-var h = new pb.Handle("com.sample.service", false);
-
-var p = {msg: "Rob"};
-var s = JSON.stringify(p);
-var call = h.call("palm://com.palm.node_js_service/test", s);
-call.addListener('response', responseArrived);
+module.exports = pbus;

@@ -16,12 +16,14 @@
 *
 * LICENSE@@@ */
 
-#include <ev.h>
 #include <glib.h>
 #include <iostream>
 #include <node.h>
 #include <stdlib.h>
 #include <v8.h>
+#include <list>
+#include <map>
+#include <algorithm>
 
 #include "node_ls2_call.h"
 #include "node_ls2_handle.h"
@@ -35,37 +37,64 @@ using namespace std;
 
 struct econtext {
     GPollFD* pfd;
-    ev_io* iow;
     int nfd, afd;
     gint maxpri;
 
-    ev_prepare pw;
-    ev_check cw;
-    ev_timer tw;
+    uv_prepare_t pw;
+    uv_check_t cw;
+    uv_timer_t tw;
+    uv_poll_t* poll;
 
     GMainContext* gc;
 };
 
-static bool prepared = false;
+static uv_timer_t timeout_handle;
+static bool query = false;
 
-static void timer_cb(EV_P_ ev_timer* w, int revents)
+static void timeout_cb(uv_timer_t* w, int revents)
 {
     /* nop */
 }
 
-static void io_cb(EV_P_ ev_io* w, int revents)
+static void uv_timeout_cb(uv_timer_t *handle, int status)
 {
-    /* nop */
+    query = true;
+    uv_timer_stop(&timeout_handle);
 }
 
-static void prepare_cb(EV_P_ ev_prepare* w, int revents)
+// a map of fds to GPollFDs 
+std::multimap<int, GPollFD *>pfdMap;
+
+static void poll_cb(uv_poll_t* handle, int status, int events)
+{
+    GPollFD *pfd = (GPollFD *) handle->data;
+    int fd = pfd->fd;
+
+    // Iterate over *all* GPollFDs matching the watcher's fd
+    std::pair <std::multimap<int,GPollFD *>::iterator, std::multimap<int,GPollFD *>::iterator> ret;
+    ret = pfdMap.equal_range(fd);
+    for (std::multimap<int,GPollFD *>::iterator it=ret.first; it!=ret.second; ++it) {
+        pfd = it->second;
+        pfd->revents |= pfd->events & ((events & UV_READABLE ? G_IO_IN : 0) | (events & UV_WRITABLE ? G_IO_OUT : 0));
+    }
+
+    pfdMap.erase(fd);
+    uv_poll_stop(handle); 
+}
+
+static void prepare_cb(uv_prepare_t* w, int revents)
 {
     struct econtext* ctx = (struct econtext*)(((char*)w) - offsetof(struct econtext, pw));
     gint timeout;
     int i;
 
+    // return if uv_timeout is active
+    if (!query)
+        return;
+
     g_main_context_prepare(ctx->gc, &ctx->maxpri);
 
+    // Get all sources from glib main context
     while (ctx->afd < (ctx->nfd = g_main_context_query(
                                       ctx->gc,
                                       ctx->maxpri,
@@ -74,7 +103,7 @@ static void prepare_cb(EV_P_ ev_prepare* w, int revents)
                                       ctx->afd))
           ) {
         free(ctx->pfd);
-        free(ctx->iow);
+        free(ctx->poll);
 
         ctx->afd = 1;
 
@@ -83,68 +112,56 @@ static void prepare_cb(EV_P_ ev_prepare* w, int revents)
         }
 
         ctx->pfd = (GPollFD*)malloc(ctx->afd * sizeof(GPollFD));
-        ctx->iow = (ev_io*)malloc(ctx->afd * sizeof(ev_io));
+        ctx->poll = (uv_poll_t*) malloc(ctx->afd * sizeof(uv_poll_t));
     }
 
+    // Create poll handle and start polling
     for (i = 0; i < ctx->nfd; ++i) {
+
         GPollFD* pfd = ctx->pfd + i;
-        ev_io* iow = ctx->iow + i;
+        uv_poll_t* pollw = ctx->poll + i;
+        int fd = pfd->fd;
 
+        // libuv does not support more than one watcher on same fd
+        // Create a map of fds and check for duplicate fd
+        std::multimap<int,GPollFD *>::iterator it = pfdMap.find(fd);
+        if (it != pfdMap.end()) {
+                pfdMap.insert(std::pair<int, GPollFD *>(fd, pfd));
+                continue;
+        }
+        // insert into map
+        pfdMap.insert(std::pair<int, GPollFD *>(fd, pfd));
+        // Feed gcontext fd data to libuv and start polling
         pfd->revents = 0;
+        //TODO: Make this a list of pfd structs, maybe? Not necessary with the multimap...
+        pollw->data = pfd;
 
-        ev_io_init(
-            iow,
-            io_cb,
-            pfd->fd,
-            (pfd->events & G_IO_IN ? EV_READ : 0)
-            | (pfd->events & G_IO_OUT ? EV_WRITE : 0)
-            );
-        iow->data = (void*)pfd;
-        ev_set_priority(iow, EV_MINPRI);
-        ev_io_start(EV_A_ iow);
+        uv_poll_init(uv_default_loop(), pollw, pfd->fd);	
+        uv_poll_start(pollw, UV_READABLE | UV_WRITABLE, poll_cb);
     }
 
     if (timeout >= 0) {
-        ev_timer_set(&ctx->tw, timeout * 1e-3, 0.);
-        ev_timer_start(EV_A_ &ctx->tw);
+        uv_timer_start(&ctx->tw, timeout_cb, timeout * 1e-3, 0);
     }
-
-    prepared = true;
 }
 
-static void check_cb(EV_P_ ev_check* w, int revents)
+static void check_cb(uv_check_t* w, int revents)
 {
     struct econtext* ctx = (struct econtext*)(((char*)w) - offsetof(struct econtext, cw));
-    int i;
 
-    // For some reason libev calls check() before prepare() on the very
-    // first iteration
-    if (!prepared) {
-        return;
+    if (uv_is_active((uv_handle_t*) &ctx->tw)) {
+        uv_timer_stop(&ctx->tw);
     }
 
-    for (i = 0; i < ctx->nfd; ++i) {
-        ev_io* iow = ctx->iow + i;
+    int ready = g_main_context_check(ctx->gc, ctx->maxpri, ctx->pfd, ctx->nfd);
+    if(ready)
+        g_main_context_dispatch(ctx->gc);  
 
-        if (ev_is_pending(iow)) {
-            GPollFD* pfd = ctx->pfd + i;
-            int revents = ev_clear_pending(EV_A_ iow);
-
-            pfd->revents |= pfd->events &
-                ((revents & EV_READ ? G_IO_IN : 0)
-                | (revents & EV_WRITE ? G_IO_OUT : 0));
-        }
-
-        ev_io_stop(EV_A_ iow);
+    // libuv is too fast for glib, hold on for a while
+    query = false;
+    if (!uv_is_active((uv_handle_t*) &timeout_handle)) {
+        uv_timer_start(&timeout_handle, uv_timeout_cb, 1, 0);   // 1ms
     }
-
-    if (ev_is_active(&ctx->tw)) {
-        ev_timer_stop(EV_A_ &ctx->tw);
-    }
-
-    g_main_context_check(ctx->gc, ctx->maxpri, ctx->pfd, ctx->nfd);
-    
-    g_main_context_dispatch(ctx->gc);
 }
 
 static struct econtext default_context;
@@ -152,37 +169,30 @@ static struct econtext default_context;
 init(Handle<Object> target)
 {
     HandleScope scope;
-
     gMainLoop = g_main_loop_new(NULL, true);
 
     GMainContext *gc = g_main_context_default();
     struct econtext *ctx = &default_context;
 
-    ctx->gc     = g_main_context_ref (gc);
+    ctx->gc = g_main_context_ref (gc);
     ctx->nfd = 0;
     ctx->afd = 0;
-    ctx->iow = 0;
     ctx->pfd = 0;
 
-    ev_prepare_init (&ctx->pw, prepare_cb);
-    ev_set_priority (&ctx->pw, EV_MINPRI);
-    ev_prepare_start (EV_DEFAULT_ &ctx->pw);
-    ev_unref(EV_DEFAULT_UC);
+    query = true;
 
-    ev_check_init (&ctx->cw, check_cb);
-    ev_set_priority (&ctx->cw, EV_MAXPRI);
-    ev_check_start (EV_DEFAULT_ &ctx->cw);
+    // Prepare
+    uv_prepare_init (uv_default_loop(), &ctx->pw);
+    uv_prepare_start (&ctx->pw, prepare_cb);
+    uv_unref((uv_handle_t*) &ctx->pw);
 
-    // If we unref this there are cases where libev thinks there aren't
-    // any remaining watchers and quits. Commenting this out means that
-    // the following doesn't quit immediately:
-    //
-    // var ls2 = require('palmbus');
-    //
-    //ev_unref(EV_DEFAULT_UC);
+    uv_check_init(uv_default_loop(), &ctx->cw);
+    uv_check_start (&ctx->cw, check_cb); 
+    uv_unref((uv_handle_t*) &ctx->cw);
 
-    ev_init (&ctx->tw, timer_cb);
-    ev_set_priority (&ctx->tw, EV_MINPRI);
+    // Timer
+    uv_timer_init(uv_default_loop(), &ctx->tw);
+    uv_timer_init(uv_default_loop(), &timeout_handle);
 
     LS2Handle::Initialize(target);
     LS2Message::Initialize(target);
@@ -193,4 +203,6 @@ GMainLoop* GetMainLoop()
 {
     return gMainLoop;
 }
-NODE_MODULE(palmbus, init)
+
+NODE_MODULE(webos_sysbus, init)
+
