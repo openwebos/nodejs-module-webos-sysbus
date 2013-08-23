@@ -189,8 +189,10 @@ static void prepare_cb(uv_prepare_t* w, int revents)
     }
 
     // remove watchers that are no longer needed
-    for (WatcherMap::iterator it = pollwMap.begin(); it != pollwMap.end(); it++) {
+    for (WatcherMap::iterator it = pollwMap.begin(), next; it != pollwMap.end(); it = next) {
         std::pair<int, uv_poll_t *> p = *it;
+        next = it;
+        next++;
         int fd = p.first;
         uv_poll_t *pollw = p.second;
         EventMap::iterator eventFound = events.find(fd);
@@ -199,7 +201,7 @@ static void prepare_cb(uv_prepare_t* w, int revents)
             std::cerr << "removing uv_poll_t for fd:" << fd <<std::endl;
             #endif
             uv_poll_stop(pollw);
-            pollwMap.erase(fd);
+            pollwMap.erase(it); // invalidates "it", don't use it after this
             PollData *data = (PollData *)pollw->data;
             delete data;
             delete pollw;
