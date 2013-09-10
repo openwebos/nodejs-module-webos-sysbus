@@ -77,6 +77,16 @@ static void uv_timeout_cb(uv_timer_t *handle, int status)
     uv_timer_stop(&timeout_handle);
 }
 
+// Cleanup memory after poll handle is closed
+static void close_cb(uv_handle_t* handle)
+{
+    uv_poll_t* pollw = (uv_poll_t*) handle;
+
+    PollData *data = (PollData *)pollw->data;
+    delete data;
+    delete pollw;
+}
+
 static void poll_cb(uv_poll_t* handle, int status, int events)
 {
     PollData *data = (PollData *) handle->data;
@@ -201,10 +211,8 @@ static void prepare_cb(uv_prepare_t* w, int revents)
             std::cerr << "removing uv_poll_t for fd:" << fd <<std::endl;
             #endif
             uv_poll_stop(pollw);
+            uv_close((uv_handle_t *) pollw, close_cb);
             pollwMap.erase(it); // invalidates "it", don't use it after this
-            PollData *data = (PollData *)pollw->data;
-            delete data;
-            delete pollw;
         }
     }
 
