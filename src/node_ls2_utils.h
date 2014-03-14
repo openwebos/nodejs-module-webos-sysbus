@@ -1,6 +1,6 @@
 /* @@@LICENSE
 *
-*      Copyright (c) 2010-2013 LG Electronics, Inc.
+*      Copyright (c) 2010-2014 LG Electronics, Inc.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -65,6 +65,15 @@ template <> struct ConvertFromJS<unsigned long> {
 	}
 	
 	unsigned long fValue;
+};
+
+template <> struct ConvertFromJS<int> {
+	explicit ConvertFromJS(const v8::Handle<v8::Value>& value) : fValue(value->Int32Value()) {}
+	operator int() {
+		return fValue;
+	}
+
+	int fValue;
 };
 
 // Include the generated templates. If we had C++0x we could use variadic templates instead.

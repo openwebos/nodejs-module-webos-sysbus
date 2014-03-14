@@ -181,6 +181,11 @@ documentation for a more detailed discussion of subscriptions.
 Use to cancel a call to prevent any further responses and release the resources
 needed for the call.
 
+#### setResponseTimeout(timeout_ms)
+
+Sets timeout for a method call. The call will be canceled if no reply
+is received after the timeout_ms milliseconds.
+
 ### Message object
 
 This object cannot be constructed from JavaScript, but is passed to various events.

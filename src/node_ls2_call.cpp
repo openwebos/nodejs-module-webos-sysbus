@@ -1,6 +1,6 @@
 /* @@@LICENSE
 *
-*      Copyright (c) 2010-2013 LG Electronics, Inc.
+*      Copyright (c) 2010-2014 LG Electronics, Inc.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -50,6 +50,7 @@ void LS2Call::Initialize (Handle<Object> target)
     t->InstanceTemplate()->SetInternalFieldCount(1);
 
     NODE_SET_PROTOTYPE_METHOD(t, "cancel", CancelWrapper);
+    NODE_SET_PROTOTYPE_METHOD(t, "setResponseTimeout", SetResponseTimeoutWrapper);
 
     response_symbol = NODE_PSYMBOL("response");
 
@@ -130,6 +131,19 @@ void LS2Call::Cancel()
 {
     CancelInternal(fToken, true, false);
     fToken = LSMESSAGE_TOKEN_INVALID;
+}
+
+Handle<Value> LS2Call::SetResponseTimeoutWrapper(const Arguments& args)
+{
+	return VoidMemberFunctionWrapper<LS2Call, int>(&LS2Call::SetResponseTimeout, args);
+}
+
+void LS2Call::SetResponseTimeout(int timeout_ms)
+{
+	LSErrorWrapper err;
+	if (!LSCallSetTimeout(fHandle->Get(), fToken, timeout_ms, err)) {
+		err.ThrowError();
+	}
 }
 
 LS2Call::~LS2Call()

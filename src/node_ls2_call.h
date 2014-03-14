@@ -1,6 +1,6 @@
 /* @@@LICENSE
 *
-*      Copyright (c) 2010-2013 LG Electronics, Inc.
+*      Copyright (c) 2010-2014 LG Electronics, Inc.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -47,7 +47,9 @@ protected:
 	static v8::Handle<v8::Value> New(const v8::Arguments& args);
 
 	static v8::Handle<v8::Value> CancelWrapper(const v8::Arguments& args);
+	static v8::Handle<v8::Value> SetResponseTimeoutWrapper(const v8::Arguments& args);
     void Cancel();
+	void SetResponseTimeout(int timeout_ms);
 
 private:
 	virtual ~LS2Call();
